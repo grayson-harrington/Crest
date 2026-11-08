@@ -213,6 +213,11 @@ struct BrowserRootShell: View, BrowserChromeAnimating {
                 tabPromotionNamespace: tabPromotionNamespace
             )
         }
+        .onGeometryChange(for: CGRect.self) { proxy in
+            proxy.frame(in: .global)
+        } action: { frame in
+            model.recordSidebarSurfaceFrame(frame)
+        }
         .background {
             BrowserSidebarPointerNavigation(
                 isSidebarVisible:

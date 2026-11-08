@@ -59,6 +59,9 @@ final class BrowserRootModel {
     }
     @ObservationIgnored private var isSidebarApproachingDockStorage = false
     private(set) var isSidebarSurfaceHovered = false
+    /// Where the sidebar's surface sits in the window. Written during layout
+    /// and read only when a click arrives, so nothing observes it.
+    @ObservationIgnored private var sidebarSurfaceFrame = CGRect.zero
     /// Whether the floating sidebar came out because the pointer reached the
     /// window edge, rather than from a click, command or page request.
     private(set) var isFloatingSidebarRevealedByPointer = false
@@ -342,6 +345,16 @@ extension BrowserRootModel {
 
     var sidebarWidth: CGFloat {
         sidebarWidthTransaction.width
+    }
+
+    func recordSidebarSurfaceFrame(_ frame: CGRect) {
+        sidebarSurfaceFrame = frame
+    }
+
+    /// Whether the floating sidebar is drawn over `globalPoint`. A collapsed
+    /// sidebar is only offset out of sight, so its frame answers nothing.
+    func floatingSidebarCovers(_ globalPoint: CGPoint) -> Bool {
+        sidebarPresentation == .floating && sidebarSurfaceFrame.contains(globalPoint)
     }
 
     var sidebarWidthBinding: Binding<CGFloat> {

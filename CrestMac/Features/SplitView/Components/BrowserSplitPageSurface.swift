@@ -117,7 +117,8 @@ struct BrowserSplitPageSurface: View {
                 BrowserSplitCardPointerMonitor(
                     cardFrames: cardFrames,
                     handleMouseDown: handleMouseDown,
-                    lift: liftGesture
+                    lift: liftGesture,
+                    isCovered: isCoveredByFloatingSidebar
                 )
             }
         }
@@ -333,6 +334,13 @@ struct BrowserSplitPageSurface: View {
                 isCarryingCard: model.splitCardLift.isCarrying,
                 isCommandPalettePresented: model.chrome.isCommandPalettePresented
             )
+    }
+
+    /// Whether the floating sidebar is drawn over `point`, a point in the
+    /// card-frame space.
+    private func isCoveredByFloatingSidebar(_ point: CGPoint) -> Bool {
+        model.floatingSidebarCovers(
+            CGPoint(x: surfaceOrigin.x + point.x, y: surfaceOrigin.y + point.y))
     }
 
     private func handleMouseDown(_ tabID: UUID) {
