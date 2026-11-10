@@ -10,14 +10,21 @@ struct BrowserRootPeekLayer: View {
 
     @Environment(\.layoutDirection) private var layoutDirection
 
-    @ViewBuilder
     var body: some View {
-        ForEach(
-            transientBrowsing.peekRequests.filter {
-                $0.assignment == BrowserSpaceRuntimeAssignment(space: space)
-                    && $0.sourceTabID == model.browser.selectedTabID(in: space.id)
+        ZStack {
+            peeks
+        }
+        // A Peek on its way out, or hidden behind another tab, stops covering
+        // as soon as it is no longer shown, not when its fade ends.
+        .onChange(of: shownRequests.map(\.id)) { previous, current in
+            for requestID in previous where !current.contains(requestID) {
+                model.clearPeekCardFrame(for: requestID)
             }
-        ) { request in
+        }
+    }
+
+    private var peeks: some View {
+        ForEach(shownRequests) { request in
             BrowserPeekOverlay(
                 request: request,
                 browser: model.browser,
@@ -34,7 +41,21 @@ struct BrowserRootPeekLayer: View {
                 BrowserWebFocusRestorationGate(
                     browserChromeOwnsFocus: !request.isSelected(in: model.browser), pageChromeOwnsFocus: false)
             )
+            // What the card covers keeps Split View from handing the pointer
+            // to the pane beneath it.
+            .environment(\.browserTransientCardFrameReport) { frames in
+                model.recordPeekCardFrames(frames, for: request)
+            }
+            .onDisappear { model.clearPeekCardFrame(for: request.id) }
             .zIndex(BrowserRootMetrics.peekZIndex)
+        }
+    }
+
+    /// The Peeks this Space shows: those over its selected tab.
+    private var shownRequests: [BrowserPeekRequest] {
+        transientBrowsing.peekRequests.filter {
+            $0.assignment == BrowserSpaceRuntimeAssignment(space: space)
+                && $0.sourceTabID == model.browser.selectedTabID(in: space.id)
         }
     }
 }

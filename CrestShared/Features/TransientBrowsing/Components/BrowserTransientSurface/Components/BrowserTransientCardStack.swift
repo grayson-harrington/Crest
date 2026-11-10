@@ -33,6 +33,12 @@ struct BrowserTransientCardStack<WebContent: View, LinkMenuAnchor: View>: View {
     /// The shell's control the link menu opens from, under the card.
     @ViewBuilder let linkMenuAnchor: (BrowserPeekLinkMenuPresentation) -> LinkMenuAnchor
 
+    @Environment(\.browserTransientCardFrameReport) private var reportCoveredFrames
+    /// Where the card and its controls are drawn, kept apart so the gap
+    /// beside the controls stays the scrim's. Not observed: nothing here draws
+    /// from it.
+    @State private var coveredFrames = BrowserTransientCoveredFrames()
+
     /// Whether the card is the preview above its link menu.
     @State private var showsLinkMenu = false
     /// Counts the times the person opened the link menu.
@@ -46,11 +52,11 @@ struct BrowserTransientCardStack<WebContent: View, LinkMenuAnchor: View>: View {
             spacing: arrangement.controlSpacing
         ) {
             if arrangement.placesControlsAboveCard {
-                actionBar
-                pageCard
+                actionBar.modifier(coveredRegion(\.controls, reachingCard: .bottom))
+                pageCard.modifier(coveredRegion(\.card))
             } else {
-                pageCard
-                actionBar
+                pageCard.modifier(coveredRegion(\.card))
+                actionBar.modifier(coveredRegion(\.controls, reachingCard: .top))
             }
         }
         // A card the person pulls carries its controls with it as it grows
@@ -74,6 +80,23 @@ struct BrowserTransientCardStack<WebContent: View, LinkMenuAnchor: View>: View {
 
     private var arrangement: BrowserTransientCardArrangement {
         state.arrangement
+    }
+
+    /// Measures one part of the stack where it is drawn, after the motion, so
+    /// a pulled card reports where it is, and tells the shell what the card
+    /// and its controls cover.
+    ///
+    /// The controls' region reaches across the spacing to the card on
+    /// `edge`, as wide as the controls, so a pointer moving between them never
+    /// crosses ground the card does not cover.
+    private func coveredRegion(
+        _ part: ReferenceWritableKeyPath<BrowserTransientCoveredFrames, CGRect?>,
+        reachingCard edge: VerticalEdge? = nil
+    ) -> BrowserTransientCoveredRegion {
+        BrowserTransientCoveredRegion(
+            frames: coveredFrames, part: part,
+            reach: edge.map { BrowserTransientCoveredRegion.Reach(edge: $0, length: arrangement.controlSpacing) },
+            report: reportCoveredFrames)
     }
 
     private var actionBar: some View {
@@ -175,6 +198,55 @@ struct BrowserTransientCardStack<WebContent: View, LinkMenuAnchor: View>: View {
 
     private var pageCardScale: CGSize {
         state.scale(for: .pageCard, from: sourceTransform)
+    }
+}
+
+extension EnvironmentValues {
+    /// Told where a transient card and its controls sit in the window, in the
+    /// global space, whenever either moves: one rectangle each, the controls'
+    /// reaching across the spacing to the card so the two meet. The scrim
+    /// around them, including the ground beside the controls, is not part of
+    /// it.
+    @Entry var browserTransientCardFrameReport: @MainActor ([CGRect]) -> Void = { _ in }
+}
+
+/// The last measured frames of a transient card and its controls.
+@MainActor
+private final class BrowserTransientCoveredFrames {
+    var card: CGRect?
+    var controls: CGRect?
+
+    var all: [CGRect] {
+        [card, controls].compactMap(\.self)
+    }
+}
+
+/// Records where one part of the stack is drawn and reports the whole.
+private struct BrowserTransientCoveredRegion: ViewModifier {
+    /// How far a measured region extends past one of its edges.
+    struct Reach {
+        let edge: VerticalEdge
+        let length: CGFloat
+
+        func extend(_ frame: CGRect) -> CGRect {
+            CGRect(
+                x: frame.minX, y: edge == .top ? frame.minY - length : frame.minY,
+                width: frame.width, height: frame.height + length)
+        }
+    }
+
+    let frames: BrowserTransientCoveredFrames
+    let part: ReferenceWritableKeyPath<BrowserTransientCoveredFrames, CGRect?>
+    let reach: Reach?
+    let report: @MainActor ([CGRect]) -> Void
+
+    func body(content: Content) -> some View {
+        content.onGeometryChange(for: CGRect.self) { proxy in
+            proxy.frame(in: .global)
+        } action: { frame in
+            frames[keyPath: part] = reach?.extend(frame) ?? frame
+            report(frames.all)
+        }
     }
 }
 

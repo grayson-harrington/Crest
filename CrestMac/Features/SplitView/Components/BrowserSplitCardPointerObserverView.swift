@@ -34,11 +34,17 @@ import AppKit
 /// space anchored on the very view this one spans, so `convert(_:from: nil)` on a
 /// flipped view lands in the same space with no window-chrome arithmetic anywhere.
 /// `hitTest` returns `nil` so the view itself is never a click target.
+///
+/// A frame says where a card is, not whether anything is drawn over it, so a
+/// press that lands on chrome covering a card is left alone: it belongs to the
+/// chrome, and neither focuses nor picks up the card beneath.
 @MainActor
 final class BrowserSplitCardPointerObserverView: NSView {
     var cardFrames: BrowserSplitCardFrameRegistry
     var handleMouseDown: @MainActor @Sendable (UUID) -> Void
     var lift: BrowserSplitCardLiftGesture
+    /// Whether chrome is drawn over a point in this view's own space.
+    var isCovered: @MainActor @Sendable (CGPoint) -> Bool
 
     private static let escapeKeyCode: UInt16 = 53
 
@@ -48,11 +54,13 @@ final class BrowserSplitCardPointerObserverView: NSView {
     init(
         cardFrames: BrowserSplitCardFrameRegistry,
         handleMouseDown: @escaping @MainActor @Sendable (UUID) -> Void,
-        lift: BrowserSplitCardLiftGesture
+        lift: BrowserSplitCardLiftGesture,
+        isCovered: @escaping @MainActor @Sendable (CGPoint) -> Bool
     ) {
         self.cardFrames = cardFrames
         self.handleMouseDown = handleMouseDown
         self.lift = lift
+        self.isCovered = isCovered
         super.init(frame: .zero)
     }
 
@@ -117,26 +125,30 @@ final class BrowserSplitCardPointerObserverView: NSView {
         switch event.type {
         case .leftMouseDown:
             let location = convert(event.locationInWindow, from: nil)
+            guard let tabID = card(pressedAt: location) else { return event }
             if lift.begin(location, BrowserKeyboardModifierFlags(event.modifierFlags)) {
                 return nil
             }
-            return notifyMouseDown(at: location, event)
+            return notifyMouseDown(on: tabID, event)
         case .rightMouseDown, .otherMouseDown:
-            return notifyMouseDown(
-                at: convert(event.locationInWindow, from: nil),
-                event
-            )
+            let location = convert(event.locationInWindow, from: nil)
+            guard let tabID = card(pressedAt: location) else { return event }
+            return notifyMouseDown(on: tabID, event)
         default:
             return event
         }
     }
 
+    /// The card a press at `location`, in this view's space, is addressed to:
+    /// the card under it, unless chrome drawn over the card took the press.
+    func card(pressedAt location: CGPoint) -> UUID? {
+        guard !isCovered(location) else { return nil }
+        return cardFrames.tabID(containing: location)
+    }
+
     /// Always returns `event`. A monitor that swallowed the click would trade a
     /// focus change for the interaction somebody actually made.
-    private func notifyMouseDown(at location: CGPoint, _ event: NSEvent) -> NSEvent {
-        guard let tabID = cardFrames.tabID(containing: location) else {
-            return event
-        }
+    private func notifyMouseDown(on tabID: UUID, _ event: NSEvent) -> NSEvent {
         handleMouseDown(tabID)
         return event
     }

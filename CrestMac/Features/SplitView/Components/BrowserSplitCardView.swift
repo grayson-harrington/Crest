@@ -16,10 +16,10 @@ import SwiftUI
 /// Three things ride along that the single-page path has no need for:
 ///
 /// - **Hover tracking**, as an AppKit tracking area rather than `.onHover`, which
-///   is unreliable over live web content. Whether entering the card is worth a
-///   focus change is `focusesOnHover`'s answer, evaluated at the moment the
-///   pointer arrives so nothing here has to observe the preference or the address
-///   field.
+///   is unreliable over live web content. Whether the pointer in the card is
+///   worth a focus change is `focusesOnHover`'s answer, evaluated as the pointer
+///   arrives and moves so nothing here has to observe the preference or the
+///   address field.
 /// - **Frame registration**, twice over. The surface's own registry, in its named
 ///   space, is how a single mouse-down monitor turns a point into a card — a tap
 ///   gesture cannot replace it, because web content consumes the clicks that
@@ -43,9 +43,10 @@ struct BrowserSplitCardView: View {
     let commands: BrowserCommandPaletteCommandRegistry
     /// Where this card records its bounds for the surface's click monitor.
     let cardFrames: BrowserSplitCardFrameRegistry
-    /// Asked when the pointer enters the card, never during layout, so the guards
-    /// it consults are read fresh and observing them costs no re-render here.
-    let focusesOnHover: @MainActor @Sendable () -> Bool
+    /// Asked with the pointer's location in the card-frame space as it enters
+    /// or moves within the card, never during layout, so the guards it consults
+    /// are read fresh and observing them costs no re-render here.
+    let focusesOnHover: @MainActor @Sendable (CGPoint) -> Bool
     /// This card's request to become the focused one.
     let onFocusRequest: @MainActor @Sendable () -> Void
 
@@ -69,8 +70,10 @@ struct BrowserSplitCardView: View {
             commands: commands
         )
         .overlay {
-            BrowserSplitCardHoverTracker { isHovering in
-                guard isSelectedSpace, isHovering, focusesOnHover() else { return }
+            BrowserSplitCardHoverTracker { location in
+                guard isSelectedSpace, let frame = cardFrames.frame(for: tab.id),
+                    focusesOnHover(CGPoint(x: frame.minX + location.x, y: frame.minY + location.y))
+                else { return }
                 onFocusRequest()
             }
         }

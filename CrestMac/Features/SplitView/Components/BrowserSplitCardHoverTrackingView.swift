@@ -1,6 +1,7 @@
 import AppKit
 
-/// A transparent view that reports the pointer entering and leaving its bounds.
+/// A transparent view that reports where the pointer is while it is inside its
+/// bounds: as it arrives, and as it moves.
 ///
 /// SwiftUI's `.onHover` is not usable here: a card's content is a `WKWebView`, and
 /// hover callbacks over live web content arrive late, arrive once, or do not
@@ -16,20 +17,32 @@ import AppKit
 /// so a card that resizes, scrolls, or is clipped by a narrowing window needs no
 /// rebuild of its own. `.activeInKeyWindow` keeps a background window from moving
 /// focus in the window someone is actually working in.
+///
+/// Movement is reported as well as arrival because a tracking area answers to
+/// geometry alone: it reports the pointer entering a card even when chrome drawn
+/// over the card is what the pointer is on. A pointer that arrives on that
+/// chrome and then moves off it onto the card never enters again, so it is
+/// reported as it moves. The view is flipped, so a location reads from the top
+/// like the SwiftUI frames it is compared with.
 @MainActor
 final class BrowserSplitCardHoverTrackingView: NSView {
-    var onHoverChange: @MainActor @Sendable (Bool) -> Void
+    /// Told the pointer's location in this view's bounds.
+    var onPointerInside: @MainActor @Sendable (CGPoint) -> Void
 
     private var trackingArea: NSTrackingArea?
 
-    init(onHoverChange: @escaping @MainActor @Sendable (Bool) -> Void) {
-        self.onHoverChange = onHoverChange
+    init(onPointerInside: @escaping @MainActor @Sendable (CGPoint) -> Void) {
+        self.onPointerInside = onPointerInside
         super.init(frame: .zero)
     }
 
     @available(*, unavailable)
     required init?(coder: NSCoder) {
         fatalError("init(coder:) has not been implemented")
+    }
+
+    override var isFlipped: Bool {
+        true
     }
 
     override func hitTest(_ point: NSPoint) -> NSView? {
@@ -44,7 +57,7 @@ final class BrowserSplitCardHoverTrackingView: NSView {
         let area = NSTrackingArea(
             // `.inVisibleRect` supplies the rect, so this one is ignored.
             rect: .zero,
-            options: [.mouseEnteredAndExited, .activeInKeyWindow, .inVisibleRect],
+            options: [.mouseEnteredAndExited, .mouseMoved, .activeInKeyWindow, .inVisibleRect],
             owner: self
         )
         addTrackingArea(area)
@@ -52,10 +65,10 @@ final class BrowserSplitCardHoverTrackingView: NSView {
     }
 
     override func mouseEntered(with event: NSEvent) {
-        onHoverChange(true)
+        onPointerInside(convert(event.locationInWindow, from: nil))
     }
 
-    override func mouseExited(with event: NSEvent) {
-        onHoverChange(false)
+    override func mouseMoved(with event: NSEvent) {
+        onPointerInside(convert(event.locationInWindow, from: nil))
     }
 }

@@ -5273,6 +5273,10 @@
     "floating-sidebar-hide-arrow-removed": {
       "category": "improved",
       "message": "On iPhone and iPad, a floating sidebar no longer has an arrow to hide it, on the sidebar or in the side toolbar; scroll or tap the page to put it away."
+    },
+    "split-view-floating-sidebar-clicks": {
+      "category": "fixed",
+      "message": "On Mac, clicking the floating sidebar or a Peek over a Split View, or pointing at a Peek with focus following the mouse, no longer switches to the page underneath. Site Controls opens for the page you’re using, and the Peek stays open."
     }
   }
 }

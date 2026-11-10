@@ -59,6 +59,14 @@ final class BrowserRootModel {
     }
     @ObservationIgnored private var isSidebarApproachingDockStorage = false
     private(set) var isSidebarSurfaceHovered = false
+    /// Where the sidebar's surface sits in the window. Written during layout
+    /// and read only when a click arrives, so nothing observes it.
+    @ObservationIgnored private var sidebarSurfaceFrame = CGRect.zero
+    /// Where each drawn Peek's card and its controls sit in the window, by
+    /// request. Every Space's pages may be drawn at once, so a Peek counts only
+    /// while it is the one the window shows. Read only when the pointer
+    /// arrives, like the sidebar's frame.
+    @ObservationIgnored private var peekCardFrames: [UUID: (request: BrowserPeekRequest, frames: [CGRect])] = [:]
     /// Whether the floating sidebar came out because the pointer reached the
     /// window edge, rather than from a click, command or page request.
     private(set) var isFloatingSidebarRevealedByPointer = false
@@ -342,6 +350,32 @@ extension BrowserRootModel {
 
     var sidebarWidth: CGFloat {
         sidebarWidthTransaction.width
+    }
+
+    func recordSidebarSurfaceFrame(_ frame: CGRect) {
+        sidebarSurfaceFrame = frame
+    }
+
+    /// Records where a Peek's card and its controls are drawn, one rectangle
+    /// each, so the gap beside the controls is not counted.
+    func recordPeekCardFrames(_ frames: [CGRect], for request: BrowserPeekRequest) {
+        peekCardFrames[request.id] = (request, frames)
+    }
+
+    /// Forgets a Peek's card once that Peek is no longer drawn.
+    func clearPeekCardFrame(for requestID: UUID) {
+        peekCardFrames[requestID] = nil
+    }
+
+    /// Whether the window's chrome is drawn over `globalPoint`: the floating
+    /// sidebar or the shown Peek's card. A pointer there is using that chrome,
+    /// not the page beneath it. A collapsed sidebar is only offset out of
+    /// sight, so its frame answers nothing.
+    func chromeCovers(_ globalPoint: CGPoint) -> Bool {
+        (sidebarPresentation == .floating && sidebarSurfaceFrame.contains(globalPoint))
+            || peekCardFrames.values.contains { peek in
+                peek.request.isSelected(in: browser) && peek.frames.contains { $0.contains(globalPoint) }
+            }
     }
 
     var sidebarWidthBinding: Binding<CGFloat> {

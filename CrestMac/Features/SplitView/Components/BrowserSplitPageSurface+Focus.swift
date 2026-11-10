@@ -8,6 +8,10 @@
 ///
 /// The guards exist for these reasons:
 ///
+/// - **Covered** (hover only here; the click monitor checks it before asking).
+///   Chrome drawn over a card — the floating sidebar, or a Peek opened from
+///   another card — is what the pointer is on, not the card beneath. Focusing
+///   that card would hide a Peek, which shows only over its own card.
 /// - **Already focused.** Refocusing the focused card would push a redundant
 ///   selection through the store on every pointer entry.
 /// - **Address editing** (hover only). Focus *is* selection, and the selection
@@ -27,10 +31,12 @@
 extension BrowserSplitPageSurface {
     // MARK: - Actions - Focus
 
-    /// Whether a pointer entering an unfocused card should focus it.
+    /// Whether a pointer arriving at, or moving within, an unfocused card
+    /// should focus it.
     nonisolated static func focusesOnHover(
         followsMouse: Bool,
         isCardFocused: Bool,
+        isPointerCovered: Bool,
         isAddressEditing: Bool,
         isDraggingSidebarItem: Bool,
         isCarryingCard: Bool,
@@ -38,6 +44,7 @@ extension BrowserSplitPageSurface {
     ) -> Bool {
         guard followsMouse else { return false }
         return !isCardFocused
+            && !isPointerCovered
             && !isAddressEditing
             && !isDraggingSidebarItem
             && !isCarryingCard

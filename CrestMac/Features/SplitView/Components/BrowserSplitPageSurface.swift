@@ -15,7 +15,8 @@ import SwiftUI
 ///   register their bounds in `cardFrames`, the monitor turns a mouse-down into
 ///   one of them, and the event continues to the page untouched. The hover path
 ///   is gated by the Follow Mouse preference and evaluated only when a pointer
-///   actually arrives. Both funnel through `focusSplitCard`, which is an ordinary
+///   actually arrives or moves inside a card. Neither counts a pointer on chrome
+///   drawn over a card — the floating sidebar or a Peek — as being on the card. Both funnel through `focusSplitCard`, which is an ordinary
 ///   selection change and no-ops on the card that already has focus, so the two
 ///   inputs can never fight.
 /// - **The carry.** A ⇧⌘-held press picks a card up: the same monitor keeps the
@@ -90,7 +91,7 @@ struct BrowserSplitPageSurface: View {
                     commands: model.paletteRegistry(
                         windows: windows, layoutDirection: layoutDirection, shortcuts: shortcuts),
                     cardFrames: cardFrames,
-                    focusesOnHover: { focusesOnHover(member.id) },
+                    focusesOnHover: { focusesOnHover(member.id, at: $0) },
                     onFocusRequest: { if isSelectedSpace { model.focusSplitCard(member.id) } }
                 )
             },
@@ -117,7 +118,8 @@ struct BrowserSplitPageSurface: View {
                 BrowserSplitCardPointerMonitor(
                     cardFrames: cardFrames,
                     handleMouseDown: handleMouseDown,
-                    lift: liftGesture
+                    lift: liftGesture,
+                    isCovered: isCoveredByChrome
                 )
             }
         }
@@ -323,16 +325,26 @@ struct BrowserSplitPageSurface: View {
         }
     }
 
-    private func focusesOnHover(_ tabID: UUID) -> Bool {
+    /// Whether the pointer at `point`, in the card-frame space, should focus
+    /// the card `tabID`.
+    private func focusesOnHover(_ tabID: UUID, at point: CGPoint) -> Bool {
         isSelectedSpace
             && Self.focusesOnHover(
                 followsMouse: appPreferences.splitFocusFollowsMouse,
                 isCardFocused: model.pages.activeTabID == tabID,
+                isPointerCovered: isCoveredByChrome(point),
                 isAddressEditing: model.isAddressEditing,
                 isDraggingSidebarItem: model.sidebarInteraction.sidebarReorderState.isDragging,
                 isCarryingCard: model.splitCardLift.isCarrying,
                 isCommandPalettePresented: model.chrome.isCommandPalettePresented
             )
+    }
+
+    /// Whether the window's chrome — the floating sidebar or a Peek — is
+    /// drawn over `point`, a point in the card-frame space.
+    private func isCoveredByChrome(_ point: CGPoint) -> Bool {
+        model.chromeCovers(
+            CGPoint(x: surfaceOrigin.x + point.x, y: surfaceOrigin.y + point.y))
     }
 
     private func handleMouseDown(_ tabID: UUID) {
