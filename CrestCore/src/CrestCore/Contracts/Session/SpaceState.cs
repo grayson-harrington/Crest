@@ -112,11 +112,13 @@ public sealed record SpaceState(
 
     /// <summary>The rows a person steps through in the Space's sidebar, in order; see
     /// <see cref="SidebarOutline.Stops"/>.</summary>
-    public IReadOnlyList<SidebarRow> Stops() => Sidebar.Stops(Folders, Shows);
+    public IReadOnlyList<SidebarRow> Stops() => Sidebar.Stops(Folders, Shows, SidebarOutline.NoKeptTabs);
 
     /// <summary>The tab one step in <paramref name="direction"/> from the shown tab shows,
-    /// or null; see <see cref="SidebarOutline.Step"/>.</summary>
-    public Guid? Step(Guid shownTabId, AdjacentDirection direction) => Sidebar.Step(shownTabId, direction, Folders, Shows);
+    /// counting the tabs of <paramref name="keptTabIds"/> a collapsed folder keeps on
+    /// screen, or null; see <see cref="SidebarOutline.Step"/>.</summary>
+    public Guid? Step(Guid shownTabId, AdjacentDirection direction, IReadOnlySet<Guid> keptTabIds) =>
+        Sidebar.Step(shownTabId, direction, Folders, Shows, keptTabIds);
 
     /// <summary>The tab a swipe in <paramref name="direction"/> from the shown tab reaches,
     /// or null at either end; see <see cref="SidebarOutline.Swipe"/>.</summary>

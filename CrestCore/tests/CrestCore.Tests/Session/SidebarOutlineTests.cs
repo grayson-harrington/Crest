@@ -41,6 +41,36 @@ public sealed class SidebarOutlineTests {
 
     #region Actions - Folders
 
+    /// Next and previous tab stop on the tabs a collapsed folder keeps on screen
+    /// under its header, inside folders it holds too, and pass over the tabs it
+    /// hides; a collapsed section hides the tabs its folders keep.
+    [Fact]
+    public void SteppingStopsOnTheTabsACollapsedFolderKeepsOnScreen() {
+        var outer = Folder("outer", TabPlacement.Current, collapsed: true);
+        var inner = Folder("inner", TabPlacement.Current, outer.Id, collapsed: true);
+        var reading = Folder("reading", TabPlacement.Saved, collapsed: true);
+        var above = Tab("above");
+        var kept = Tab("kept", folder: outer.Id);
+        var hidden = Tab("hidden", folder: outer.Id);
+        var nested = Tab("nested", folder: inner.Id);
+        var below = Tab("below");
+        var saved = Tab("saved", TabPlacement.Saved, reading.Id);
+        var outline = SidebarOutline.Of([saved, above, kept, hidden, nested, below], [outer, inner, reading]);
+        FolderState[] folders = [outer, inner, reading];
+        HashSet<Guid> keeping = [kept.Id, nested.Id, saved.Id];
+        Guid? Step(TabState from, AdjacentDirection direction, bool savedExpanded = false) =>
+            outline.Step(from.Id, direction, folders, section => !section.IsCollapsible || savedExpanded, keeping);
+
+        Assert.Equal(kept.Id, Step(above, AdjacentDirection.Next));
+        Assert.Equal(nested.Id, Step(kept, AdjacentDirection.Next));
+        Assert.Equal(below.Id, Step(nested, AdjacentDirection.Next));
+        Assert.Equal(nested.Id, Step(below, AdjacentDirection.Previous));
+        Assert.Equal(above.Id, Step(kept, AdjacentDirection.Previous));
+        Assert.Equal(nested.Id, Step(hidden, AdjacentDirection.Next));
+        Assert.Equal(saved.Id, Step(above, AdjacentDirection.Previous, savedExpanded: true));
+        Assert.Equal(below.Id, Step(above, AdjacentDirection.Previous));
+    }
+
     #endregion
 
     #region Actions - Order

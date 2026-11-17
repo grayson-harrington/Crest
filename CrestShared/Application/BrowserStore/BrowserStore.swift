@@ -103,11 +103,13 @@ final class BrowserStore {
     }
 
     /// Shows the tab one stop from this window's in the order its sidebar
-    /// shows them, wrapping, and answers it; nil when the core showed no other.
+    /// shows them, counting the tabs it keeps on screen under collapsed
+    /// folders, wrapping, and answers it; nil when the core showed no other.
     @discardableResult
     func selectAdjacentTab(_ direction: AdjacentDirection) -> UUID? {
         let shown = shownTab?.id
-        guard sendWindowIntent(ShowAdjacentTab(windowID: windowID, direction: direction)),
+        let kept = Array(BrowserSidebarSelection.keptTabIDs(in: self))
+        guard sendWindowIntent(ShowAdjacentTab(windowID: windowID, direction: direction, keptTabIDs: kept)),
             let next = shownTab?.id, next != shown
         else { return nil }
         windowRevision &+= 1

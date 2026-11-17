@@ -29,6 +29,13 @@ public sealed record SidebarOutline(IReadOnlyList<SidebarList> Lists) {
 
     #endregion
 
+    #region Static Variables
+
+    /// No tab kept on screen under a collapsed folder.
+    internal static readonly IReadOnlySet<Guid> NoKeptTabs = new HashSet<Guid>();
+
+    #endregion
+
     #region Variables
 
     /// Collections are owned when constructed or replaced on a copy.
@@ -203,25 +210,30 @@ public sealed record SidebarOutline(IReadOnlyList<SidebarList> Lists) {
 
     /// <summary>The rows a person steps through, in the order the sidebar shows them: each
     /// tab and split row of the sections <paramref name="isSectionExpanded"/> answers for,
-    /// skipping the inside of every folder of <paramref name="folders"/> that is collapsed.
-    /// A split is one stop; a folder and a Start Page are none.</summary>
-    public IReadOnlyList<SidebarRow> Stops(IReadOnlyList<FolderState> folders, Func<TabPlacement, bool> isSectionExpanded) {
+    /// skipping the inside of every folder of <paramref name="folders"/> that is collapsed
+    /// but for the rows it keeps on screen under its header: those that hold a tab of
+    /// <paramref name="keptTabIds"/>, and the folders on the way to them. A split is one
+    /// stop; a folder and a Start Page are none.</summary>
+    public IReadOnlyList<SidebarRow> Stops(IReadOnlyList<FolderState> folders, Func<TabPlacement, bool> isSectionExpanded,
+        IReadOnlySet<Guid> keptTabIds) {
         ArgumentNullException.ThrowIfNull(folders);
         ArgumentNullException.ThrowIfNull(isSectionExpanded);
+        ArgumentNullException.ThrowIfNull(keptTabIds);
         var collapsed = Collapsed(folders);
-        return [.. Rows(isSectionExpanded, id => !collapsed.Contains(id)).Where(row => !row.Kind.OpensList)];
+        return [.. Rows(isSectionExpanded, id => !collapsed.Contains(id), keptTabIds).Where(row => !row.Kind.OpensList)];
     }
 
     /// <summary>The tab one step in <paramref name="direction"/> from the shown tab
-    /// <paramref name="shownTabId"/> shows among the <see cref="Stops"/>, wrapping at both
-    /// ends: the first tab of the stop the step reaches, or null when there is no stop or
-    /// the step reaches the stop that shows it. A tab no stop shows steps from where it
+    /// <paramref name="shownTabId"/> shows among the <see cref="Stops"/>, which count the
+    /// tabs of <paramref name="keptTabIds"/> a collapsed folder keeps on screen, wrapping at
+    /// both ends: the first tab of the stop the step reaches, or null when there is no stop
+    /// or the step reaches the stop that shows it. A tab no stop shows steps from where it
     /// lives in the sidebar's order, inside a collapsed folder or section, or from the ends
     /// when it has no place there, as a Start Page has none.</summary>
     public Guid? Step(Guid shownTabId, AdjacentDirection direction, IReadOnlyList<FolderState> folders,
-        Func<TabPlacement, bool> isSectionExpanded) {
+        Func<TabPlacement, bool> isSectionExpanded, IReadOnlySet<Guid> keptTabIds) {
         ArgumentNullException.ThrowIfNull(direction);
-        var stops = Stops(folders, isSectionExpanded);
+        var stops = Stops(folders, isSectionExpanded, keptTabIds);
         if (stops.Count == 0) return null;
         int shown = -1;
         for (int index = 0; index < stops.Count && shown < 0; index++)
@@ -246,7 +258,7 @@ public sealed record SidebarOutline(IReadOnlyList<SidebarList> Lists) {
     public Guid? Swipe(Guid shownTabId, AdjacentDirection direction, IReadOnlyList<FolderState> folders,
         Func<TabPlacement, bool> isSectionExpanded) {
         ArgumentNullException.ThrowIfNull(direction);
-        var stops = Stops(folders, isSectionExpanded);
+        var stops = Stops(folders, isSectionExpanded, NoKeptTabs);
         int shown = -1;
         int card = -1;
         for (int index = 0; index < stops.Count && shown < 0; index++) {
@@ -271,23 +283,48 @@ public sealed record SidebarOutline(IReadOnlyList<SidebarList> Lists) {
         folders.Where(folder => folder.IsCollapsed).Select(folder => folder.Id).ToHashSet();
 
     private IEnumerable<Guid> Walk(Func<TabPlacement, bool> isSectionExpanded, Func<Guid, bool> isFolderExpanded) =>
-        Rows(isSectionExpanded, isFolderExpanded).SelectMany(row => row.Listed);
+        Rows(isSectionExpanded, isFolderExpanded, NoKeptTabs).SelectMany(row => row.Listed);
 
     /// Every row of the sections `isSectionExpanded` answers for, in order, each
-    /// folder row followed by its inside when `isFolderExpanded` answers for it.
-    private IEnumerable<SidebarRow> Rows(Func<TabPlacement, bool> isSectionExpanded, Func<Guid, bool> isFolderExpanded) {
+    /// folder row followed by its inside when `isFolderExpanded` answers for it, or
+    /// else by the rows it keeps on screen: those that hold a tab of `keptTabIds`,
+    /// each folder among them followed by the same, open or not.
+    private IEnumerable<SidebarRow> Rows(Func<TabPlacement, bool> isSectionExpanded, Func<Guid, bool> isFolderExpanded,
+        IReadOnlySet<Guid> keptTabIds) {
         var insides = new Dictionary<Guid, SidebarList>();
         foreach (var list in Lists)
             if (list.FolderId is { } id) insides.TryAdd(id, list);
         IEnumerable<SidebarRow> List(IReadOnlyList<SidebarRow> rows) {
             foreach (var row in rows) {
                 yield return row;
-                if (row.Kind.OpensList && isFolderExpanded(row.Id) && insides.TryGetValue(row.Id, out var inside))
-                    foreach (var nested in List(inside.Rows)) yield return nested;
+                if (!row.Kind.OpensList || !insides.TryGetValue(row.Id, out var inside)) continue;
+                IEnumerable<SidebarRow> shown = isFolderExpanded(row.Id) ? List(inside.Rows)
+                    : keptTabIds.Count == 0 ? [] : Kept(inside.Rows, insides, keptTabIds);
+                foreach (var nested in shown) yield return nested;
             }
         }
         return Lists.Where(list => list.FolderId is null && isSectionExpanded(list.Section)).SelectMany(list => List(list.Rows));
     }
+
+    /// The rows of `rows` a collapsed folder keeps on screen, in order: each that
+    /// holds a tab of `keptTabIds`, a folder among them followed by the same of its
+    /// inside, open or not.
+    private static IEnumerable<SidebarRow> Kept(IReadOnlyList<SidebarRow> rows, Dictionary<Guid, SidebarList> insides,
+        IReadOnlySet<Guid> keptTabIds) {
+        foreach (var row in rows) {
+            if (!Keeps(row, insides, keptTabIds)) continue;
+            yield return row;
+            if (row.Kind.OpensList && insides.TryGetValue(row.Id, out var inside))
+                foreach (var nested in Kept(inside.Rows, insides, keptTabIds)) yield return nested;
+        }
+    }
+
+    /// Whether the row shows a tab of `keptTabIds`, or is a folder that holds one
+    /// however deep.
+    private static bool Keeps(SidebarRow row, Dictionary<Guid, SidebarList> insides, IReadOnlySet<Guid> keptTabIds) =>
+        row.Kind.OpensList
+            ? insides.TryGetValue(row.Id, out var inside) && inside.Rows.Any(nested => Keeps(nested, insides, keptTabIds))
+            : row.Members.Any(keptTabIds.Contains);
 
     #endregion
 

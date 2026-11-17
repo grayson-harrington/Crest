@@ -48,11 +48,7 @@ enum BrowserSidebarSelection {
                     walk(inside)
                     continue
                 }
-                let kept =
-                    interaction?.collapsedFolderVisibility(
-                        for: BrowserFolderRuntimeAssignment(
-                            folderID: row.id, spaceID: space.id, profileID: space.profileID)
-                    ).state.keptTabIDs ?? []
+                let kept = keptTabIDs(ofCollapsedFolder: row.id, in: space, interaction: interaction)
                 if !kept.isEmpty { walk(inside, keeping: kept) }
             }
         }
@@ -60,6 +56,44 @@ enum BrowserSidebarSelection {
         if space.settings.isSavedTabsExpanded { walk(space.sidebar.section(.saved)) }
         walk(space.sidebar.section(.current))
         return units
+    }
+
+    /// The tabs the sidebar keeps on screen under the collapsed folders it
+    /// shows in the Space the window shows, as `itemUnits` walks them: each
+    /// collapsed folder reached through open folders and sections adds the
+    /// tabs it keeps. Empty for a locked Space, and where no folder keeps any.
+    static func keptTabIDs(in browser: BrowserStore) -> Set<UUID> {
+        guard let space = browser.spaceModel(browser.selectedSpaceID) else { return [] }
+        let interaction = browser.interactionObserver as? BrowserSidebarInteractionState
+        if space.settings.accessPolicy == .deviceOwnerAuthentication {
+            guard let access = interaction?.sidebarSpaceAccess, !access.isLocked(space) else { return [] }
+        }
+        var kept: Set<UUID> = []
+        func walk(_ list: SidebarListModel) {
+            for row in list.rows where row.kind.opensList {
+                guard space.folders.model(row.id)?.isCollapsed == true else {
+                    walk(space.sidebar.inside(row.id))
+                    continue
+                }
+                kept.formUnion(keptTabIDs(ofCollapsedFolder: row.id, in: space, interaction: interaction))
+            }
+        }
+        walk(space.pinSource.sidebar.section(.pinned))
+        if space.settings.isSavedTabsExpanded { walk(space.sidebar.section(.saved)) }
+        walk(space.sidebar.section(.current))
+        return kept
+    }
+
+    /// The tabs the collapsed folder `folderID` keeps on screen, of those it
+    /// still holds.
+    private static func keptTabIDs(
+        ofCollapsedFolder folderID: UUID, in space: SpaceModel, interaction: BrowserSidebarInteractionState?
+    ) -> Set<UUID> {
+        guard let interaction else { return [] }
+        let kept = interaction.collapsedFolderVisibility(
+            for: BrowserFolderRuntimeAssignment(folderID: folderID, spaceID: space.id, profileID: space.profileID)
+        ).state.keptTabIDs
+        return kept.isEmpty ? [] : kept.intersection(space.tabIDs(inFolder: folderID))
     }
 
     /// The same units, of tabs alone.

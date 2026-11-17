@@ -14,7 +14,7 @@ namespace CrestCore.Native;
 public static class ContractCodec {
     /// <summary>SHA-256 of the canonical contract schema.</summary>
     public static ReadOnlySpan<byte> Fingerprint => [
-        0x7d, 0xdd, 0x31, 0x05, 0x8f, 0xbc, 0x7d, 0xf4, 0x12, 0x81, 0x5a, 0x5e, 0xe5, 0x47, 0x69, 0xc5, 0xf2, 0x3c, 0xc6, 0xc0, 0x3f, 0xb3, 0xfe, 0x54, 0x09, 0x50, 0xd7, 0x15, 0x17, 0x33, 0x90, 0xc1
+        0xea, 0x96, 0xc5, 0xd8, 0xdc, 0x40, 0x3e, 0x01, 0xe7, 0x2e, 0xc0, 0xfc, 0x8e, 0x4b, 0x97, 0x66, 0xa4, 0xed, 0xed, 0xbc, 0x52, 0xb8, 0x01, 0x88, 0x56, 0x78, 0xe1, 0xbf, 0xcd, 0xcf, 0x82, 0x8c
     ];
 
     /// <summary>SHA-256 of the engine contract alone, which an engine binding registers with.</summary>
@@ -18216,7 +18216,8 @@ public static class ContractCodec {
         ArgumentNullException.ThrowIfNull(reader);
         return new ShowAdjacentTab(
             reader.ReadGuid(),
-            ReadAdjacentDirection(reader));
+            ReadAdjacentDirection(reader),
+            reader.ReadList(() => reader.ReadGuid()));
     }
 
     public static void WriteShowAdjacentTab(WireWriter writer, ShowAdjacentTab value) {
@@ -18224,6 +18225,10 @@ public static class ContractCodec {
         ArgumentNullException.ThrowIfNull(value);
         writer.WriteGuid(value.WindowId);
         WriteAdjacentDirection(writer, value.Direction);
+        writer.WriteCount(value.KeptTabIds.Count);
+        foreach (var itemKeptTabIds in value.KeptTabIds) {
+            writer.WriteGuid(itemKeptTabIds);
+        }
     }
 
     public static ShowHistoryEntry ReadShowHistoryEntry(WireReader reader) {

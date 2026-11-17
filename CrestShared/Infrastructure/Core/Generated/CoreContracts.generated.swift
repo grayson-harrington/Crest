@@ -6496,6 +6496,7 @@ struct ShowAdjacentSpace: Intent, WindowIntent, Equatable, Sendable {
 struct ShowAdjacentTab: Intent, WindowIntent, Equatable, Sendable {
     let windowID: UUID
     let direction: AdjacentDirection
+    let keptTabIDs: [UUID]
 }
 
 struct ShowBlockedPopups: PageRequest, Equatable, Sendable {

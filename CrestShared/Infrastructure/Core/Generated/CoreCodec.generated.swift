@@ -7,7 +7,7 @@ import Foundation
 enum CoreCodec {
     /// SHA-256 of the canonical contract schema. The core refuses any other.
     static let fingerprint: [UInt8] = [
-        0x7d, 0xdd, 0x31, 0x05, 0x8f, 0xbc, 0x7d, 0xf4, 0x12, 0x81, 0x5a, 0x5e, 0xe5, 0x47, 0x69, 0xc5, 0xf2, 0x3c, 0xc6, 0xc0, 0x3f, 0xb3, 0xfe, 0x54, 0x09, 0x50, 0xd7, 0x15, 0x17, 0x33, 0x90, 0xc1
+        0xea, 0x96, 0xc5, 0xd8, 0xdc, 0x40, 0x3e, 0x01, 0xe7, 0x2e, 0xc0, 0xfc, 0x8e, 0x4b, 0x97, 0x66, 0xa4, 0xed, 0xed, 0xbc, 0x52, 0xb8, 0x01, 0x88, 0x56, 0x78, 0xe1, 0xbf, 0xcd, 0xcf, 0x82, 0x8c
     ]
     /// SHA-256 of the engine contract alone, which an engine binding registers with.
     static let engineFingerprint: [UInt8] = [
@@ -22898,12 +22898,23 @@ extension ShowAdjacentTab {
     init(from reader: inout WireReader) throws(WireError) {
         let windowID = try reader.readUUID()
         let direction = try AdjacentDirection(from: &reader)
-        self.init(windowID: windowID, direction: direction)
+        let keptTabIDsCount = try reader.readCount()
+        var keptTabIDs: [UUID] = []
+        keptTabIDs.reserveCapacity(keptTabIDsCount)
+        for _ in 0..<keptTabIDsCount {
+            let keptTabIDsElement = try reader.readUUID()
+            keptTabIDs.append(keptTabIDsElement)
+        }
+        self.init(windowID: windowID, direction: direction, keptTabIDs: keptTabIDs)
     }
 
     func encode(into writer: inout WireWriter) {
         writer.writeUUID(windowID)
         direction.encode(into: &writer)
+        writer.writeCount(keptTabIDs.count)
+        for element0 in keptTabIDs {
+            writer.writeUUID(element0)
+        }
     }
 
     func encodeIntent(into writer: inout WireWriter) {
