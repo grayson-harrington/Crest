@@ -10,7 +10,7 @@ public sealed class CredentialCaptureEvent {
 
     public static readonly CredentialCaptureEvent Username = new(name: "username", decide: RememberUsername);
     public static readonly CredentialCaptureEvent Focus = new(name: "focus", decide: (facts, accepted, hint, _, now) => {
-        if (facts.PasswordKind is null) return CredentialCaptureDecision.For(CredentialCaptureAction.DismissFill);
+        if (!OffersFill(facts)) return CredentialCaptureDecision.For(CredentialCaptureAction.DismissFill);
         if (!accepted || !facts.HasFormId || !facts.HasFillTarget) return CredentialCaptureDecision.For(CredentialCaptureAction.Ignore);
         var source = UsernameSource(facts, hint, now);
         return CredentialCaptureDecision.For(CredentialCaptureAction.OfferFill, source, source == CredentialUsernameSource.None,
@@ -83,6 +83,14 @@ public sealed class CredentialCaptureEvent {
     private static CredentialCaptureDecision RememberUsername(CredentialFormFacts facts, bool accepted, CredentialUsernameHint? hint,
         CredentialPendingCandidate? pending, double now) =>
         CredentialCaptureDecision.For(accepted && facts.HasUsername ? CredentialCaptureAction.RememberUsername : CredentialCaptureAction.Ignore);
+
+    /// Whether a focused field is one a fill prompt serves: any password field,
+    /// or a username field of a sign-in, whose form asks for the current
+    /// password or for the username alone. A username field of a form that
+    /// creates an account is offered nothing.
+    private static bool OffersFill(CredentialFormFacts facts) => facts.FocusesUsername
+        ? facts.PasswordKind is null or CredentialPasswordKind.Current
+        : facts.PasswordKind is not null;
 
     /// An explicit username wins; otherwise a remembered one that still applies.
     private static CredentialUsernameSource UsernameSource(CredentialFormFacts facts, CredentialUsernameHint? hint, double now) {

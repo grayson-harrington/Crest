@@ -7,7 +7,7 @@ import Foundation
 enum CoreCodec {
     /// SHA-256 of the canonical contract schema. The core refuses any other.
     static let fingerprint: [UInt8] = [
-        0x7d, 0xdd, 0x31, 0x05, 0x8f, 0xbc, 0x7d, 0xf4, 0x12, 0x81, 0x5a, 0x5e, 0xe5, 0x47, 0x69, 0xc5, 0xf2, 0x3c, 0xc6, 0xc0, 0x3f, 0xb3, 0xfe, 0x54, 0x09, 0x50, 0xd7, 0x15, 0x17, 0x33, 0x90, 0xc1
+        0xf3, 0x69, 0x0e, 0xcb, 0x4a, 0xc1, 0x4c, 0xf1, 0x60, 0xaa, 0x83, 0xab, 0x56, 0x8a, 0x63, 0xb5, 0x49, 0x68, 0x01, 0x04, 0x29, 0xa1, 0xd0, 0xf6, 0x29, 0x66, 0x5c, 0x7c, 0x93, 0x78, 0xf7, 0x7b
     ]
     /// SHA-256 of the engine contract alone, which an engine binding registers with.
     static let engineFingerprint: [UInt8] = [
@@ -6266,13 +6266,24 @@ extension CredentialExportFile {
 extension CredentialFill {
     init(from reader: inout WireReader) throws(WireError) {
         let source = try CredentialFillSource(from: &reader)
-        let passwordKind = try CredentialPasswordKind(from: &reader)
+        let passwordKind: CredentialPasswordKind?
+        if try reader.readPresence() {
+            let passwordKindValue = try CredentialPasswordKind(from: &reader)
+            passwordKind = passwordKindValue
+        } else {
+            passwordKind = nil
+        }
         self.init(source: source, passwordKind: passwordKind)
     }
 
     func encode(into writer: inout WireWriter) {
         source.encode(into: &writer)
-        passwordKind.encode(into: &writer)
+        if let present0 = passwordKind {
+            writer.writePresence(true)
+            present0.encode(into: &writer)
+        } else {
+            writer.writePresence(false)
+        }
     }
 
     func encodeQuery(into writer: inout WireWriter) {
@@ -6341,7 +6352,8 @@ extension CredentialFormFacts {
             hasVisiblePasswordField = nil
         }
         let hasFillTarget = try reader.readBool()
-        self.init(event: event, frameOrigin: frameOrigin, topLevelOrigin: topLevelOrigin, isMainFrame: isMainFrame, hasFormID: hasFormID, hasUsername: hasUsername, hasPassword: hasPassword, passwordKind: passwordKind, hasVisiblePasswordField: hasVisiblePasswordField, hasFillTarget: hasFillTarget)
+        let focusesUsername = try reader.readBool()
+        self.init(event: event, frameOrigin: frameOrigin, topLevelOrigin: topLevelOrigin, isMainFrame: isMainFrame, hasFormID: hasFormID, hasUsername: hasUsername, hasPassword: hasPassword, passwordKind: passwordKind, hasVisiblePasswordField: hasVisiblePasswordField, hasFillTarget: hasFillTarget, focusesUsername: focusesUsername)
     }
 
     func encode(into writer: inout WireWriter) {
@@ -6365,6 +6377,7 @@ extension CredentialFormFacts {
             writer.writePresence(false)
         }
         writer.writeBool(hasFillTarget)
+        writer.writeBool(focusesUsername)
     }
 }
 

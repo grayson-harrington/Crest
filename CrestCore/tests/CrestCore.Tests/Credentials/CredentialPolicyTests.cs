@@ -12,8 +12,9 @@ public sealed class CredentialPolicyTests {
 
     private static CredentialFormFacts Facts(CredentialCaptureEvent kind, CredentialOrigin? frame = null,
         CredentialOrigin? top = null, bool mainFrame = true, bool username = false, bool password = false,
-        CredentialPasswordKind? passwordKind = CredentialPasswordKind.Current, bool? visible = null, bool target = true) =>
-        new(kind, frame ?? Login, top ?? Login, mainFrame, true, username, password, passwordKind, visible, target);
+        CredentialPasswordKind? passwordKind = CredentialPasswordKind.Current, bool? visible = null, bool target = true,
+        bool focusesUsername = false) =>
+        new(kind, frame ?? Login, top ?? Login, mainFrame, true, username, password, passwordKind, visible, target, focusesUsername);
 
     private static CredentialCaptureDecision Decide(CredentialFormFacts facts, CredentialUsernameHint? hint,
         CredentialPendingCandidate? pending, double now) =>
@@ -31,6 +32,27 @@ public sealed class CredentialPolicyTests {
         Assert.Equal(CredentialCaptureAction.Ignore,
             Decide(Facts(CredentialCaptureEvent.Submit, frame: Plain, username: true, password: true), null, null, 0).Action);
         Assert.Equal(CredentialSaveValidity.InsecureOrigin, new CredentialPendingCandidate(Plain, 0).SaveValidity(Login, 1));
+    }
+
+    /// A username field of a sign-in offers saved accounts, on a step that asks
+    /// for the username alone as on a form with the current password, and a
+    /// saved credential may fill such a step; a username field of a form that
+    /// creates an account offers nothing, and an insecure frame nothing at all.
+    [Fact]
+    public void AUsernameFieldOffersSavedAccountsOnlyOnASecureSignIn() {
+        CredentialCaptureAction Focus(CredentialPasswordKind? passwordKind, CredentialOrigin? frame = null) =>
+            Decide(Facts(CredentialCaptureEvent.Focus, frame, passwordKind: passwordKind, focusesUsername: true), null, null, 0).Action;
+
+        Assert.Equal(CredentialCaptureAction.OfferFill, Focus(null));
+        Assert.Equal(CredentialCaptureAction.OfferFill, Focus(CredentialPasswordKind.Current));
+        Assert.Equal(CredentialCaptureAction.DismissFill, Focus(CredentialPasswordKind.New));
+        Assert.Equal(CredentialCaptureAction.Ignore, Focus(null, Plain));
+        Assert.Equal(CredentialCaptureAction.DismissFill,
+            Decide(Facts(CredentialCaptureEvent.Focus, passwordKind: null), null, null, 0).Action);
+        Assert.True(CredentialFillSource.Saved.Offers(null));
+        Assert.False(CredentialFillSource.Generated.Offers(null));
+        Assert.True(CredentialFillSource.Saved.Offers(CredentialPasswordKind.Current));
+        Assert.False(CredentialFillSource.Saved.Offers(CredentialPasswordKind.New));
     }
 
     [Fact]

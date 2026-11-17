@@ -17,32 +17,47 @@ struct BrowserCredentialSuggestionPrompt: View {
     @State private var fillErrorMessage: String?
 
     var body: some View {
-        BrowserCredentialPromptSurface(
-            accessibilityLabel: Text("Crest password suggestions"),
-            accessibilityIdentifier: "crest-password-suggestions",
-            width: metrics.fillPromptWidth,
-            metrics: metrics
-        ) {
-            BrowserCredentialSuggestionPromptContent(
-                request: request,
-                space: space,
-                siteIconData: port.siteIconData,
-                model: model,
-                fillErrorMessage: fillErrorMessage,
-                metrics: metrics,
-                dismiss: port.dismiss,
-                fill: fill
-            )
+        Group {
+            if isHeldBack {
+                Color.clear.frame(width: 0, height: 0)
+            } else {
+                BrowserCredentialPromptSurface(
+                    accessibilityLabel: Text("Crest password suggestions"),
+                    accessibilityIdentifier: "crest-password-suggestions",
+                    width: metrics.fillPromptWidth,
+                    metrics: metrics
+                ) {
+                    BrowserCredentialSuggestionPromptContent(
+                        request: request,
+                        space: space,
+                        siteIconData: port.siteIconData,
+                        model: model,
+                        fillErrorMessage: fillErrorMessage,
+                        metrics: metrics,
+                        dismiss: port.dismiss,
+                        fill: fill
+                    )
+                }
+            }
         }
         .task(id: request.id) {
             fillErrorMessage = nil
             await model.load(request, in: port.spaceID, using: browser)
+            guard !Task.isCancelled, request.focusesUsername, model.suggestions.isEmpty else { return }
+            port.dismiss()
         }
         .onDisappear(perform: model.cancel)
     }
 
     private var space: BrowserSpaceIdentity? {
         browser.spaceModel(port.spaceID)?.identity
+    }
+
+    /// A prompt a username field raised stays unseen until it has a password
+    /// to offer, and closes when it has none, so an email field on a site the
+    /// Space holds nothing for never shows an empty prompt.
+    private var isHeldBack: Bool {
+        request.focusesUsername && model.suggestions.isEmpty
     }
 
     private func fill(_ descriptor: CredentialDescriptor) {

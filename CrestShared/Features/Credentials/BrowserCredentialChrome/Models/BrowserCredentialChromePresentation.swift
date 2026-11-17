@@ -13,7 +13,7 @@ enum BrowserCredentialChromePresentation: Equatable {
         }
         guard let fillRequest else { return .none }
         switch fillRequest.passwordKind {
-        case .current:
+        case .current, nil:
             return .suggestions(fillRequest)
         case .new:
             return .strongPassword(fillRequest)

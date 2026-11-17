@@ -19,10 +19,12 @@ public enum CredentialUsernameSource { None, Explicit, Hint }
 
 /// What one validated form message says, without its credential material. The
 /// platform keeps the username and password values; the core only learns
-/// whether they are present.
+/// whether they are present. A focus on a username field says so with
+/// `FocusesUsername`, and its `PasswordKind` is then the kind of its form's
+/// password field, or null on a step that asks for the username alone.
 public sealed record CredentialFormFacts(CredentialCaptureEvent Event, CredentialOrigin FrameOrigin,
     CredentialOrigin TopLevelOrigin, bool IsMainFrame, bool HasFormId, bool HasUsername, bool HasPassword,
-    CredentialPasswordKind? PasswordKind, bool? HasVisiblePasswordField, bool HasFillTarget);
+    CredentialPasswordKind? PasswordKind, bool? HasVisiblePasswordField, bool HasFillTarget, bool FocusesUsername);
 
 /// Whether a fill may go ahead.
 public sealed record CredentialFillDecision(bool IsAllowed);

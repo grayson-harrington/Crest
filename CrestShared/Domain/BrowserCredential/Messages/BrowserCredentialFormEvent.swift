@@ -22,7 +22,8 @@ struct BrowserCredentialFormEvent: Hashable, Sendable, Decodable {
                 && fields.isTrustedUserEvent
                 && !fields.hasInvalidUsername
                 && !fields.containsPassword
-                && fields.passwordKind != nil
+                && !fields.hasInvalidPasswordKind
+                && (fields.passwordKind != nil || fields.focusesUsername)
         })
     static let submit = BrowserCredentialFormEvent(
         name: "submit", captureEvent: .submit,

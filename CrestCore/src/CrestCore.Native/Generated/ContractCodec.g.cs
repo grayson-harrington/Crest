@@ -14,7 +14,7 @@ namespace CrestCore.Native;
 public static class ContractCodec {
     /// <summary>SHA-256 of the canonical contract schema.</summary>
     public static ReadOnlySpan<byte> Fingerprint => [
-        0x7d, 0xdd, 0x31, 0x05, 0x8f, 0xbc, 0x7d, 0xf4, 0x12, 0x81, 0x5a, 0x5e, 0xe5, 0x47, 0x69, 0xc5, 0xf2, 0x3c, 0xc6, 0xc0, 0x3f, 0xb3, 0xfe, 0x54, 0x09, 0x50, 0xd7, 0x15, 0x17, 0x33, 0x90, 0xc1
+        0xf3, 0x69, 0x0e, 0xcb, 0x4a, 0xc1, 0x4c, 0xf1, 0x60, 0xaa, 0x83, 0xab, 0x56, 0x8a, 0x63, 0xb5, 0x49, 0x68, 0x01, 0x04, 0x29, 0xa1, 0xd0, 0xf6, 0x29, 0x66, 0x5c, 0x7c, 0x93, 0x78, 0xf7, 0x7b
     ];
 
     /// <summary>SHA-256 of the engine contract alone, which an engine binding registers with.</summary>
@@ -7163,14 +7163,19 @@ public static class ContractCodec {
         ArgumentNullException.ThrowIfNull(reader);
         return new CredentialFill(
             ReadCredentialFillSource(reader),
-            ReadCredentialPasswordKind(reader));
+            reader.ReadPresence() ? (CredentialPasswordKind?)ReadCredentialPasswordKind(reader) : null);
     }
 
     public static void WriteCredentialFill(WireWriter writer, CredentialFill value) {
         ArgumentNullException.ThrowIfNull(writer);
         ArgumentNullException.ThrowIfNull(value);
         WriteCredentialFillSource(writer, value.Source);
-        WriteCredentialPasswordKind(writer, value.PasswordKind);
+        if (value.PasswordKind is { } presentPasswordKind) {
+            writer.WritePresence(true);
+            WriteCredentialPasswordKind(writer, presentPasswordKind);
+        } else {
+            writer.WritePresence(false);
+        }
     }
 
     public static CredentialFillDecision ReadCredentialFillDecision(WireReader reader) {
@@ -7212,6 +7217,7 @@ public static class ContractCodec {
             reader.ReadBool(),
             reader.ReadPresence() ? (CredentialPasswordKind?)ReadCredentialPasswordKind(reader) : null,
             reader.ReadPresence() ? (bool?)reader.ReadBool() : null,
+            reader.ReadBool(),
             reader.ReadBool());
     }
 
@@ -7238,6 +7244,7 @@ public static class ContractCodec {
             writer.WritePresence(false);
         }
         writer.WriteBool(value.HasFillTarget);
+        writer.WriteBool(value.FocusesUsername);
     }
 
     public static CredentialImportCandidate ReadCredentialImportCandidate(WireReader reader) {

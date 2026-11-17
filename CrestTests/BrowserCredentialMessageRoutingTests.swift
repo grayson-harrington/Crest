@@ -105,8 +105,82 @@ final class BrowserCredentialMessageRoutingTests: XCTestCase {
         XCTAssertEqual(password, "generated-secret")
     }
 
+    /// A username field offers saved accounts: on a step that asks for the
+    /// username alone the fill puts in the username and never hands the page
+    /// the password, and on a sign-in form it fills both fields. A search box
+    /// and an unmarked text field offer nothing.
+    func testUsernameFieldOffersSavedAccountsOnUsernameFirstAndOrdinarySignIns() async throws {
+        let page = try makePage()
+        page.webView.loadSimulatedRequest(
+            URLRequest(url: try XCTUnwrap(URL(string: "https://accounts.crest.test/signin"))),
+            responseHTML: """
+                <!doctype html>
+                <style>input { display: block; width: 220px; height: 32px; }</style>
+                <input id="search" type="search">
+                <input id="note" type="text">
+                <form id="identifier">
+                  <input id="email" type="email" autocomplete="username">
+                  <button type="button">Next</button>
+                </form>
+                """
+        )
+        try await waitUntil { page.completedNavigationCount == 1 }
+
+        for selector in ["#search", "#note"] {
+            try await focus(selector, in: page)
+            try await Task.sleep(for: .milliseconds(300))
+            XCTAssertNil(page.credentialFillRequest, "\(selector) must not offer saved accounts")
+        }
+        let usernameStep = try await focusField("#email", in: page)
+        XCTAssertTrue(usernameStep.focusesUsername)
+        XCTAssertNil(usernameStep.passwordKind)
+        try await page.fillCredential(savedCredential(for: usernameStep, in: page), for: usernameStep.id)
+        let stepValues =
+            try await page.webView.evaluateJavaScript(
+                "[document.querySelector('#email').value, Array.from(document.querySelectorAll('input')).some((input) => input.value === 'saved-secret')]"
+            ) as? [Any]
+        XCTAssertEqual(stepValues?.first as? String, "saved@example.com")
+        XCTAssertEqual(stepValues?.last as? Bool, false)
+
+        page.webView.loadSimulatedRequest(
+            URLRequest(url: try XCTUnwrap(URL(string: "https://accounts.crest.test/login"))),
+            responseHTML: Self.loginDocument
+        )
+        try await waitUntil { page.completedNavigationCount == 2 }
+        let signIn = try await focusField("input[autocomplete=username]", in: page)
+        XCTAssertEqual(signIn.passwordKind, .current)
+        try await page.fillCredential(savedCredential(for: signIn, in: page), for: signIn.id)
+        let filled =
+            try await page.webView.evaluateJavaScript(
+                "[document.querySelector('input[autocomplete=username]').value, document.querySelector('input[type=password]').value]"
+            ) as? [String]
+        XCTAssertEqual(filled, ["saved@example.com", "saved-secret"])
+    }
+
+    private func savedCredential(for request: BrowserCredentialFillRequest, in page: BrowserPage) -> BrowserCredential {
+        BrowserCredential(
+            descriptor: CredentialDescriptor(
+                spaceID: page.spaceID, origin: request.origin,
+                username: "saved@example.com", createdAt: .now
+            ),
+            password: "saved-secret"
+        )
+    }
+
     private func focusPassword(in page: BrowserPage) async throws -> BrowserCredentialFillRequest {
+        try await focusField("input[type=password]", in: page)
+    }
+
+    private func focusField(_ selector: String, in page: BrowserPage) async throws -> BrowserCredentialFillRequest {
         let previousRequestID = page.credentialFillRequest?.id
+        try await focus(selector, in: page)
+        try await waitUntil {
+            page.credentialFillRequest != nil && page.credentialFillRequest?.id != previousRequestID
+        }
+        return try XCTUnwrap(page.credentialFillRequest)
+    }
+
+    private func focus(_ selector: String, in page: BrowserPage) async throws {
         let focused = try await page.webView.callAsyncJavaScript(
             """
             const input = document.querySelector(selector);
@@ -114,15 +188,11 @@ final class BrowserCredentialMessageRoutingTests: XCTestCase {
             input.focus();
             return document.activeElement === input;
             """,
-            arguments: ["selector": "input[type=password]"],
+            arguments: ["selector": selector],
             in: nil,
             contentWorld: .page
         )
         XCTAssertEqual(focused as? Bool, true)
-        try await waitUntil {
-            page.credentialFillRequest != nil && page.credentialFillRequest?.id != previousRequestID
-        }
-        return try XCTUnwrap(page.credentialFillRequest)
     }
 
     private static let loginDocument = """

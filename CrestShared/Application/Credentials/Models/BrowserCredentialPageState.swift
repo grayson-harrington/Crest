@@ -71,7 +71,8 @@ final class BrowserCredentialPageState<FillTarget> {
             event: event, frameOrigin: frameOrigin, topLevelOrigin: topLevelOrigin, isMainFrame: isMainFrame,
             hasFormID: message.formID != nil, hasUsername: message.username != nil,
             hasPassword: message.password != nil, passwordKind: message.passwordKind,
-            hasVisiblePasswordField: message.hasVisiblePasswordField, hasFillTarget: fillTarget != nil)
+            hasVisiblePasswordField: message.hasVisiblePasswordField, hasFillTarget: fillTarget != nil,
+            focusesUsername: message.focusesUsername)
         guard
             let decision = captureDecision(
                 facts, usernameHint: pendingUsernameHint,
@@ -144,7 +145,8 @@ final class BrowserCredentialPageState<FillTarget> {
         let facts = CredentialFormFacts(
             event: .filled, frameOrigin: request.origin, topLevelOrigin: request.topLevelOrigin,
             isMainFrame: request.fieldRect != nil, hasFormID: fillFormID != nil, hasUsername: true, hasPassword: false,
-            passwordKind: request.passwordKind, hasVisiblePasswordField: nil, hasFillTarget: true)
+            passwordKind: request.passwordKind, hasVisiblePasswordField: nil, hasFillTarget: true,
+            focusesUsername: request.focusesUsername)
         if let decision = captureDecision(facts, usernameHint: nil, pendingCandidate: nil, now: .now),
             decision.action == .rememberUsername
         {
@@ -247,8 +249,9 @@ final class BrowserCredentialPageState<FillTarget> {
     }
 
     /// Whether a fill may take a saved credential or a generated password into
-    /// a field of this kind. A core that refuses fills nothing.
-    private func fillAllowed(from source: CredentialFillSource, into passwordKind: CredentialPasswordKind) -> Bool {
+    /// a field of this kind, or a saved username into a step with no password
+    /// field when the kind is nil. A core that refuses fills nothing.
+    private func fillAllowed(from source: CredentialFillSource, into passwordKind: CredentialPasswordKind?) -> Bool {
         (try? core.query(CredentialFill(source: source, passwordKind: passwordKind)))?.isAllowed ?? false
     }
 
@@ -290,7 +293,7 @@ extension BrowserCredentialPageState: CredentialCapturePerformer {
     func offerFill(_ observation: BrowserCredentialObservation<FillTarget>) {
         let message = observation.message
         let decision = observation.decision
-        guard let passwordKind = message.passwordKind, let formID = message.formID,
+        guard message.passwordKind != nil || message.focusesUsername, let formID = message.formID,
             let fillTarget = observation.fillTarget
         else { return }
         let request = BrowserCredentialFillRequest(
@@ -298,7 +301,8 @@ extension BrowserCredentialPageState: CredentialCapturePerformer {
             origin: observation.frameOrigin,
             topLevelOrigin: observation.topLevelOrigin,
             usernameHint: username(from: decision.usernameSource, explicitUsername: message.username),
-            passwordKind: passwordKind,
+            passwordKind: message.passwordKind,
+            focusesUsername: message.focusesUsername,
             isCrossOriginFrame: decision.isCrossOriginFrame,
             requestedAt: observation.now,
             fieldRect: decision.anchorsToField ? message.fieldRect : nil

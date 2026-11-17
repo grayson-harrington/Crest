@@ -5,7 +5,15 @@ struct BrowserCredentialFillRequest: Identifiable, Equatable, Sendable {
     let origin: CredentialOrigin
     let topLevelOrigin: CredentialOrigin
     let usernameHint: String?
-    let passwordKind: CredentialPasswordKind
+
+    /// The kind of password field the request fills, or nil when it came from
+    /// a username field on a step that asks for the username alone.
+    let passwordKind: CredentialPasswordKind?
+
+    /// Whether a username field asked rather than a password field. Such a
+    /// request shows a prompt only where the Space holds a password for the
+    /// site, so an email field anywhere never raises an empty one.
+    let focusesUsername: Bool
     let isCrossOriginFrame: Bool
     let requestedAt: Date
 
@@ -23,7 +31,8 @@ struct BrowserCredentialFillRequest: Identifiable, Equatable, Sendable {
         origin: CredentialOrigin,
         topLevelOrigin: CredentialOrigin,
         usernameHint: String?,
-        passwordKind: CredentialPasswordKind,
+        passwordKind: CredentialPasswordKind?,
+        focusesUsername: Bool = false,
         isCrossOriginFrame: Bool,
         requestedAt: Date,
         fieldRect: BrowserCredentialFieldRect? = nil
@@ -33,6 +42,7 @@ struct BrowserCredentialFillRequest: Identifiable, Equatable, Sendable {
         self.topLevelOrigin = topLevelOrigin
         self.usernameHint = usernameHint
         self.passwordKind = passwordKind
+        self.focusesUsername = focusesUsername
         self.isCrossOriginFrame = isCrossOriginFrame
         self.requestedAt = requestedAt
         self.fieldRect = fieldRect
@@ -50,6 +60,7 @@ struct BrowserCredentialFillRequest: Identifiable, Equatable, Sendable {
             topLevelOrigin: topLevelOrigin,
             usernameHint: usernameHint,
             passwordKind: passwordKind,
+            focusesUsername: focusesUsername,
             isCrossOriginFrame: isCrossOriginFrame,
             requestedAt: requestedAt,
             fieldRect: fieldRect

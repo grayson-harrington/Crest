@@ -34,7 +34,8 @@ enum BrowserCredentialContentBridge {
                 },
                 focusForTesting(selector) {
                   const input = document.querySelector(selector);
-                  if (!(input instanceof HTMLInputElement) || input.type !== "password") {
+                  if (!(input instanceof HTMLInputElement)
+                      || (input.type !== "password" && !isUsernameInput(input))) {
                     return false;
                   }
                   return reportFocus(input);
@@ -129,12 +130,10 @@ enum BrowserCredentialContentBridge {
               || (event.target instanceof Element ? event.target : null);
           };
 
-          const passwordInputFromEvent = (event) => {
+          const inputFromEvent = (event) => {
             const path = typeof event.composedPath === "function" ? event.composedPath() : [];
-            return path.find((node) => node instanceof HTMLInputElement && node.type === "password")
-              || (event.target instanceof HTMLInputElement && event.target.type === "password"
-                ? event.target
-                : null);
+            const input = path.find((node) => node instanceof HTMLInputElement) || event.target;
+            return input instanceof HTMLInputElement ? input : null;
           };
 
           const idFor = (root) => {
@@ -195,14 +194,45 @@ enum BrowserCredentialContentBridge {
             return { input: inputs[0], kind: "current", count: 1 };
           };
 
+          const autocompleteNamesUsername = (input) =>
+            input.autocomplete.toLowerCase().split(/\s+/).some((token) => token === "username" || token === "email");
+
           const usernameInputIn = (root, passwordInput) => {
             const inputs = inputsIn(credentialScopeFor(root, passwordInput)).filter(isVisible);
             return inputs.find((input) => input.autocomplete.toLowerCase().includes("username"))
+              || inputs.find((input) => autocompleteNamesUsername(input))
               || inputs.find((input) => input.type === "email")
               || inputs.slice(0, Math.max(inputs.indexOf(passwordInput), 0)).reverse().find((input) =>
                 input.type === "text" || input.type === "email" || input.type === "tel"
               )
               || inputs.find((input) => input.type === "text" || input.type === "email");
+          };
+
+          // A field that asks for an account's username: one the page marks as
+          // a username or email, an email field, or the field a sign-in's
+          // current password pairs with. Nothing is guessed from names, so a
+          // search box or a lone text field is never one.
+          const isUsernameInput = (input) => {
+            if (!isVisible(input) || !["text", "email", "tel"].includes(input.type)) return false;
+            if (autocompleteNamesUsername(input) || input.type === "email") return true;
+            const root = rootFor(input);
+            const selection = passwordSelection(root);
+            return selection?.kind === "current" && usernameInputIn(root, selection.input) === input;
+          };
+
+          // What a focused username field reports: its form, the username it
+          // holds, and the kind of the form's password field, which is absent
+          // on a step that asks for the username alone.
+          const usernameSnapshot = (root, usernameInput) => {
+            const inputs = passwordInputsIn(root);
+            if (inputs.length && spansIndependentCredentialScopes(root, [...inputs, usernameInput])) return null;
+            const selection = passwordSelection(root);
+            if (inputs.length && !selection) return null;
+            return {
+              formID: idFor(root),
+              username: usernameInput.value?.trim() || "",
+              passwordKind: selection?.kind
+            };
           };
 
           const snapshot = (root, preferredPasswordInput = null) => {
@@ -310,7 +340,8 @@ enum BrowserCredentialContentBridge {
           // hook cannot drift away from the path a real focus takes.
           const reportFocus = (input) => {
             const root = rootFor(input);
-            const fields = snapshot(root, input);
+            const focusesUsername = input.type !== "password";
+            const fields = focusesUsername ? usernameSnapshot(root, input) : snapshot(root, input);
             if (!fields) return false;
             const rect = rectOf(input);
             trackedField = rect ? { input: new WeakRef(input), formID: fields.formID } : null;
@@ -320,7 +351,8 @@ enum BrowserCredentialContentBridge {
               trusted: true,
               formID: fields.formID,
               username: fields.username || undefined,
-              passwordKind: fields.passwordKind,
+              passwordKind: fields.passwordKind || undefined,
+              usernameField: focusesUsername || undefined,
               fieldRect: rect || undefined
             });
             return true;
@@ -339,6 +371,13 @@ enum BrowserCredentialContentBridge {
               if (!root || !root.isConnected) {
                 rootsByID.delete(formID);
                 return false;
+              }
+              // A step that asks for the username alone gets no password.
+              if (typeof password !== "string") {
+                const usernameInput = usernameInputIn(root, null);
+                if (!usernameInput) return false;
+                setInputValue(usernameInput, username);
+                return true;
               }
               const passwordInput = passwordInputsIn(root).find((input) => passwordKind(input) === "current");
               if (!passwordInput) return false;
@@ -366,9 +405,9 @@ enum BrowserCredentialContentBridge {
           });
 
           document.addEventListener("focusin", (event) => {
-            const input = passwordInputFromEvent(event);
+            const input = inputFromEvent(event);
             if (!event.isTrusted || !input) return;
-            reportFocus(input);
+            if (input.type === "password" || isUsernameInput(input)) reportFocus(input);
           }, true);
 
           // The prompt is anchored under the focused field, so it stops

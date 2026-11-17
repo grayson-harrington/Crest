@@ -13,6 +13,7 @@ struct BrowserCredentialFormFields: Sendable {
     let isTrustedUserEvent: Bool
     let hasVisiblePasswordField: Bool?
     let fieldRect: BrowserCredentialFieldRect?
+    let focusesUsername: Bool
     let containsUsername: Bool
     let containsPassword: Bool
     let containsPasswordKind: Bool
@@ -43,6 +44,11 @@ struct BrowserCredentialFormMessage: Sendable, Decodable, CustomStringConvertibl
     let isTrustedUserEvent: Bool
     let hasVisiblePasswordField: Bool?
 
+    /// Whether a focus is on a username field rather than a password field.
+    /// Its `passwordKind` is then the kind of its form's password field, or
+    /// nil on a step that asks for the username alone.
+    let focusesUsername: Bool
+
     /// Where the focused password field sits in its frame's viewport, where the
     /// page reported it. Optional on a focus: a field the bridge cannot measure
     /// still deserves a prompt, just not an anchored one.
@@ -64,6 +70,7 @@ struct BrowserCredentialFormMessage: Sendable, Decodable, CustomStringConvertibl
         case trusted
         case hasVisiblePasswordField
         case fieldRect
+        case usernameField
     }
 
     // MARK: - Initializers
@@ -98,6 +105,7 @@ struct BrowserCredentialFormMessage: Sendable, Decodable, CustomStringConvertibl
             isTrustedUserEvent: (try? container.decodeIfPresent(Bool.self, forKey: .trusted)) ?? false,
             hasVisiblePasswordField: try? container.decodeIfPresent(Bool.self, forKey: .hasVisiblePasswordField),
             fieldRect: try? container.decodeIfPresent(BrowserCredentialFieldRect.self, forKey: .fieldRect),
+            focusesUsername: (try? container.decodeIfPresent(Bool.self, forKey: .usernameField)) ?? false,
             containsUsername: container.contains(.username),
             containsPassword: container.contains(.password),
             containsPasswordKind: container.contains(.passwordKind))
@@ -114,6 +122,7 @@ struct BrowserCredentialFormMessage: Sendable, Decodable, CustomStringConvertibl
         isTrustedUserEvent = fields.isTrustedUserEvent
         hasVisiblePasswordField = fields.hasVisiblePasswordField
         fieldRect = fields.fieldRect
+        focusesUsername = fields.focusesUsername
     }
 
     // MARK: - Actions - Decoding

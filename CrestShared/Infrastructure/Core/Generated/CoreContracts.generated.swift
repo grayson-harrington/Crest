@@ -2063,7 +2063,7 @@ struct CredentialFill: Query, Equatable, Sendable {
     typealias Answer = CredentialFillDecision
 
     let source: CredentialFillSource
-    let passwordKind: CredentialPasswordKind
+    let passwordKind: CredentialPasswordKind?
 }
 
 struct CredentialFillDecision: Equatable, Sendable {
@@ -2085,6 +2085,7 @@ struct CredentialFormFacts: Equatable, Sendable {
     var passwordKind: CredentialPasswordKind?
     var hasVisiblePasswordField: Bool?
     var hasFillTarget: Bool
+    var focusesUsername: Bool
 }
 
 struct CredentialImportCandidate: Equatable, Sendable {
@@ -10442,15 +10443,16 @@ struct CredentialFillSource: Hashable, Sendable {
     let tag: Int
     var name: String { facts.name }
     var fills: CredentialPasswordKind { facts.fills }
+    var fillsUsernameAlone: Bool { facts.fillsUsernameAlone }
     private let facts: Facts
 
-    private init(tag: Int, name: String, fills: CredentialPasswordKind) {
+    private init(tag: Int, name: String, fills: CredentialPasswordKind, fillsUsernameAlone: Bool) {
         self.tag = tag
-        facts = Facts(name: name, fills: fills)
+        facts = Facts(name: name, fills: fills, fillsUsernameAlone: fillsUsernameAlone)
     }
 
-    static let saved = CredentialFillSource(tag: 0, name: "saved", fills: .current)
-    static let generated = CredentialFillSource(tag: 1, name: "generated", fills: .new)
+    static let saved = CredentialFillSource(tag: 0, name: "saved", fills: .current, fillsUsernameAlone: true)
+    static let generated = CredentialFillSource(tag: 1, name: "generated", fills: .new, fillsUsernameAlone: false)
 
     static let all: [CredentialFillSource] = [saved, generated]
 
@@ -10469,10 +10471,12 @@ struct CredentialFillSource: Hashable, Sendable {
     private final class Facts: Sendable {
         let name: String
         let fills: CredentialPasswordKind
+        let fillsUsernameAlone: Bool
 
-        init(name: String, fills: CredentialPasswordKind) {
+        init(name: String, fills: CredentialPasswordKind, fillsUsernameAlone: Bool) {
             self.name = name
             self.fills = fills
+            self.fillsUsernameAlone = fillsUsernameAlone
         }
     }
 }

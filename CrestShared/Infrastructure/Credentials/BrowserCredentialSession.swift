@@ -64,12 +64,14 @@ final class BrowserCredentialSession {
             throw BrowserCredentialFillError.staleOrMismatchedRequest
         }
         let context = try state.fillContext(for: requestID, credential: credential)
+        // A step that asks for the username alone is never handed the password.
+        let password: Any = context.request.passwordKind == .current ? credential.password : NSNull()
         let result = try await evaluate(
             "return globalThis.__crestCredentialBridge?.fill(formID, username, password) === true;",
             [
                 "formID": context.target.formID,
                 "username": credential.descriptor.username,
-                "password": credential.password,
+                "password": password,
             ],
             context.target.frame
         )

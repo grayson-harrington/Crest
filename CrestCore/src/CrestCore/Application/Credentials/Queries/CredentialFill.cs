@@ -3,8 +3,9 @@ using CrestCore.Application;
 namespace CrestCore.Contracts;
 
 /// Whether a fill request may put a saved credential or a generated password
-/// into a password field of this kind.
-public sealed record CredentialFill(CredentialFillSource Source, CredentialPasswordKind PasswordKind)
+/// into a password field of this kind, or, with no `PasswordKind`, into a step
+/// that asks for the username alone.
+public sealed record CredentialFill(CredentialFillSource Source, CredentialPasswordKind? PasswordKind)
     : Query<CredentialFillDecision> {
     #region Actions - Answering
 

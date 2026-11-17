@@ -21,6 +21,17 @@ final class BrowserCredentialFormTests: XCTestCase {
         XCTAssertEqual(valid.formID, "form-1")
         XCTAssertEqual(valid.username, "person@example.com")
         XCTAssertNil(valid.password)
+        XCTAssertFalse(valid.focusesUsername)
+        let usernameOnlyStep = try XCTUnwrap(
+            BrowserCredentialFormMessage(body: [
+                "version": 1,
+                "event": "focus",
+                "trusted": true,
+                "formID": "form-2",
+                "usernameField": true,
+            ]))
+        XCTAssertTrue(usernameOnlyStep.focusesUsername)
+        XCTAssertNil(usernameOnlyStep.passwordKind)
         XCTAssertNil(
             BrowserCredentialFormMessage(body: [
                 "version": 1,
