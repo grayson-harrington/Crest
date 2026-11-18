@@ -132,6 +132,16 @@ internal sealed partial class Device {
                 .ToHashSet();
     }
 
+    /// The tabs the person can see in the open windows over the workspace:
+    /// the cards of the Space each one shows, leaving out the windows away on
+    /// another macOS desktop.
+    internal IReadOnlySet<Guid> InViewTabs(Guid workspaceId) {
+        if (Attached(workspaceId)?.Current is not { } session) return new HashSet<Guid>();
+        lock (gate)
+            return open.Values.Where(window => window.WorkspaceId == workspaceId && window.IsOnDesktop)
+                .SelectMany(window => window.OnScreen(session)).ToHashSet();
+    }
+
     /// Whether a window over the workspace shows `tabId` of `spaceId` on
     /// screen: the Space is the one it shows, and it shows the tab or another
     /// member of the tab's split.

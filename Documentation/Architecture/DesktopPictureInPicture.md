@@ -45,11 +45,21 @@ after the player checks below. A departing Chromium page that is playing, and
 not already in Picture in Picture, enters through the `EnterPictureInPicture`
 page request, which asks Chromium's media session to move its video.
 
+A window leaving the current macOS desktop, when the person moves to another
+desktop or a full-screen app, counts as its presented pages leaving: each
+window's page pool follows macOS's active-desktop changes and asks those pages
+to float their videos under the same rules. The pool then reports
+`ReportWindowOnDesktop` to the core. The window keeps showing its tabs, so they
+keep their pages and memory pressure treats them as on screen, but the core
+counts them as out of the person's view until the window is on their desktop
+again. Minimizing a window or hiding Crest is not a departure.
+
 Coming back to the source page ends its PiP session, whether Crest started it
 automatically or the person entered it: the video returns to its place in the
 page. The core decides this once for both engines. Each page reports its PiP
 activity in its snapshot, and when a window shows a page again (by the sidebar,
-a Space switch, a shortcut, the Dock menu or a window opening on it) the core
+a Space switch, a shortcut, the Dock menu, a window opening on it or its window
+returning to the person's desktop) the core
 sends that page's engine `ExitPictureInPicture`. WebKit closes the page's media
 presentations; Chromium closes its PiP window only when the page owns it. A page
 that stays on screen, such as one the person floated without leaving it, keeps

@@ -191,6 +191,13 @@ final class BrowserStore {
         sendWindowIntent(ResizeSplitColumns(windowID: windowID, groupID: groupID, shares: fractions))
     }
 
+    /// Tells the core whether this window is on the current macOS desktop.
+    /// Coming back to it shows its pages to the person again, which ends a
+    /// video's Picture in Picture as coming back to its tab does.
+    func reportWindowOnDesktop(_ isOnDesktop: Bool) {
+        try? core.send(ReportWindowOnDesktop(windowID: windowID, isOnDesktop: isOnDesktop))
+    }
+
     /// Runs one intent about this window. What it changed, including a tab
     /// use the core recorded, reaches the read model through the core's
     /// changes. Answers false when a rule refused it.

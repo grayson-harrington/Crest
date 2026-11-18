@@ -128,6 +128,10 @@ internal sealed class Page {
     /// pressure unloads the pages off screen longest first.
     public DateTimeOffset? HiddenSince { get; private set; }
 
+    /// Whether the page is out of the person's view: no window shows it, or
+    /// every window that does is away on another macOS desktop.
+    private bool isOutOfView;
+
     /// Whether the page's engine last said a video of the page floats in
     /// Picture in Picture, or is about to.
     public bool ShowsPictureInPicture => Phase == PagePhase.Live && shown.Media.HasFlag(PageMediaActivity.PictureInPicture);
@@ -383,12 +387,17 @@ internal sealed class Page {
     }
 
     /// Whether a window shows the page now. A page leaving the screen is
-    /// stamped at `now`; one already off screen keeps its stamp. Answers
-    /// whether the page came back on screen, which a page ending a video's
-    /// Picture in Picture reads.
-    public bool Seen(bool isShown, DateTimeOffset now) {
-        var returned = isShown && HiddenSince is not null;
-        HiddenSince = isShown ? null : HiddenSince ?? now;
+    /// stamped at `now`; one already off screen keeps its stamp. A window on
+    /// another macOS desktop still shows its pages here, so they unload no
+    /// sooner than the pages of a window in front of the person.
+    public void Seen(bool isShown, DateTimeOffset now) => HiddenSince = isShown ? null : HiddenSince ?? now;
+
+    /// Whether the person can see the page now: a window on the current macOS
+    /// desktop shows it. Answers whether the page came back into view, which
+    /// a page ending a video's Picture in Picture reads.
+    public bool Viewed(bool isInView) {
+        var returned = isInView && isOutOfView;
+        isOutOfView = !isInView;
         return returned;
     }
 

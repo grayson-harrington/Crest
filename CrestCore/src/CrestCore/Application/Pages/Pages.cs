@@ -331,12 +331,14 @@ internal sealed class Pages(Device device, Engines engines, IClock clock, IIdSou
     /// asks its engine for; see `EndPictureInPicture`.
     public void Stamp(DateTimeOffset now, Action<Engine, EngineCommand> issue) {
         ArgumentNullException.ThrowIfNull(issue);
-        var shown = new Dictionary<Guid, IReadOnlySet<Guid>>();
+        var shown = new Dictionary<Guid, (IReadOnlySet<Guid> OnScreen, IReadOnlySet<Guid> InView)>();
         foreach (var page in open.Values) {
             var shownAgain = false;
             if (page.TabId is { } tabId) {
-                if (!shown.TryGetValue(page.WorkspaceId, out var tabs)) shown[page.WorkspaceId] = tabs = device.OnScreenTabs(page.WorkspaceId);
-                shownAgain = page.Seen(tabs.Contains(tabId), now);
+                if (!shown.TryGetValue(page.WorkspaceId, out var tabs))
+                    shown[page.WorkspaceId] = tabs = (device.OnScreenTabs(page.WorkspaceId), device.InViewTabs(page.WorkspaceId));
+                page.Seen(tabs.OnScreen.Contains(tabId), now);
+                shownAgain = page.Viewed(tabs.InView.Contains(tabId));
             }
             EndPictureInPicture(page, shownAgain, issue);
         }

@@ -76,6 +76,12 @@ final class BrowserPagePool:
     var isWindowOpen: Bool { !browser.isClosed }
     /// The native window this pool's window is on screen as, while it is.
     @ObservationIgnored private(set) weak var presentationWindow: NSWindow?
+    /// Follows the macOS desktop changes that take the window away from the
+    /// person or bring it back, while the window is bound.
+    @ObservationIgnored private var desktopObserver: (any NSObjectProtocol)?
+    /// Whether the window was on the current macOS desktop when it last
+    /// changed.
+    @ObservationIgnored private var isOnDesktop = true
     private(set) var isWindowFocused = true
     var publishesPageMetadataCentrally: Bool { runtimeStore.publishesPageMetadataCentrally }
     /// Small pictures of the tabs this pool's pages showed, which a tab's
@@ -223,6 +229,7 @@ final class BrowserPagePool:
 
     func bindNativeWindow(_ window: NSWindow?) {
         presentationWindow = window
+        followDesktop(window != nil)
     }
 
     func setWindowFocused(_ focused: Bool) {
@@ -232,6 +239,7 @@ final class BrowserPagePool:
 
     func releaseWindowPresentation() {
         presentationWindow = nil
+        followDesktop(false)
         activeTabID = nil
         presentedTabIDs = []
         runtimeStore.unregister(self)
@@ -1114,6 +1122,13 @@ final class BrowserPagePool:
         let departed = Set(presentedTabIDs).subtracting(arriving)
         // Only pages leaving the visible set qualify. Moving focus within a
         // split must not float a video that is still visible beside the tab.
+        requestAutomaticPictureInPicture(leaving: departed)
+    }
+
+    /// Asks the pages of `departed` this window presents, the focused one
+    /// first, to float their videos as they leave the person's view, unless
+    /// another window presents them too.
+    private func requestAutomaticPictureInPicture(leaving departed: Set<UUID>) {
         let departures = ([activeTabID].compactMap { $0 } + presentedTabIDs)
             .filter { departed.contains($0) }
         var requested: Set<UUID> = []
@@ -1136,6 +1151,44 @@ final class BrowserPagePool:
             DiagnosticLog.pages.notice(
                 "Tab \(tabID) leaves window \(windowID); its video may float in Picture in Picture")
             pictureInPicture.leaveTab()
+        }
+    }
+
+    // MARK: - Actions - Desktop
+
+    /// Starts or stops following the macOS desktop the window is on. A window
+    /// bound again starts on the person's desktop, as the core takes every
+    /// window to.
+    private func followDesktop(_ follows: Bool) {
+        if let desktopObserver { NSWorkspace.shared.notificationCenter.removeObserver(desktopObserver) }
+        desktopObserver = nil
+        if !isOnDesktop { browser.reportWindowOnDesktop(true) }
+        isOnDesktop = true
+        guard follows else { return }
+        desktopObserver = NSWorkspace.shared.notificationCenter.addObserver(
+            forName: NSWorkspace.activeSpaceDidChangeNotification, object: nil, queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated { self?.desktopDidChange() }
+        }
+    }
+
+    /// The person moved to another macOS desktop or full-screen app, or back.
+    /// A window that leaves their desktop floats its video as leaving its tab
+    /// would; one that comes back shows its pages again, which ends that
+    /// Picture in Picture in the core. A minimized window, or one hidden with
+    /// the app, is neither.
+    private func desktopDidChange() {
+        guard let window = presentationWindow, window.isVisible, !window.isMiniaturized,
+            window.isOnActiveSpace != isOnDesktop
+        else { return }
+        isOnDesktop = window.isOnActiveSpace
+        DiagnosticLog.pages.notice("Window \(windowID) is on the current desktop: \(self.isOnDesktop)")
+        if isOnDesktop {
+            browser.reportWindowOnDesktop(true)
+            for tabID in presentedTabIDs { tabRuntimes[tabID]?.page.pictureInPicture?.returnToTab() }
+        } else {
+            requestAutomaticPictureInPicture(leaving: Set(presentedTabIDs))
+            browser.reportWindowOnDesktop(false)
         }
     }
 

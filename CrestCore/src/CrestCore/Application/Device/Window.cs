@@ -32,6 +32,9 @@ internal sealed class Window {
     /// Whether the window keeps its record in the device store.
     public bool Saved { get; }
     public Guid ShownSpaceId { get; private set; }
+    /// Whether the window is on the current macOS desktop, as its platform
+    /// last reported. Kept in memory only; every window opens on it.
+    public bool IsOnDesktop { get; set; } = true;
 
     /// The tab the window shows in each Space it has shown.
     public IEnumerable<ShownTab> ShownTabs => tabs.Select(entry => new ShownTab(entry.Key, entry.Value));
@@ -125,7 +128,9 @@ internal sealed class Window {
 
     /// A copy a command reads while the device keeps editing the window.
     public Window Snapshot() => new(Id, WorkspaceId, Saved, ShownSpaceId, new(tabs), new(shares),
-        recent.ToDictionary(entry => entry.Key, entry => new List<Guid>(entry.Value)), [.. unseen], [.. departed]);
+        recent.ToDictionary(entry => entry.Key, entry => new List<Guid>(entry.Value)), [.. unseen], [.. departed]) {
+        IsOnDesktop = IsOnDesktop
+    };
 
     #endregion
 

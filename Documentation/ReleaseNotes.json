@@ -5733,6 +5733,10 @@
     "palette-fallback-unknown-sites-only": {
       "category": "internal",
       "message": "Only the palette's address row for a site typed without a scheme that the Space doesn't already know falls back to HTTP; a history, tab or known-site row opens its address as kept."
+    },
+    "pip-follows-desktop-switch": {
+      "category": "improved",
+      "message": "A playing video now floats in Picture in Picture when you move to another desktop or full-screen app, and returns to its page when you come back."
     }
   }
 }

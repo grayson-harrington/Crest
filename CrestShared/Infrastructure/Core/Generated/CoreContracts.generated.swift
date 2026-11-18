@@ -5647,6 +5647,11 @@ struct ReportMemoryPressure: Intent, PageIntent, Equatable, Sendable {
     let level: MemoryPressureLevel
 }
 
+struct ReportWindowOnDesktop: Intent, WindowIntent, Equatable, Sendable {
+    let windowID: UUID
+    let isOnDesktop: Bool
+}
+
 struct RequestCloudPull: Intent, CloudSyncControlIntent, Equatable, Sendable {
 }
 
